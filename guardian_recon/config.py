@@ -64,5 +64,20 @@ def get_odoo_config() -> OdooConfig:
 
 
 def get_database_url() -> str:
-    """رابط قاعدة بيانات GuardianRecon نفسها (SQLite افتراضياً، PostgreSQL لاحقاً)."""
-    return os.environ.get("GUARDIAN_DB_URL", "sqlite:///./guardian_recon.db")
+    """
+    رابط قاعدة بيانات GuardianRecon نفسها.
+    الأولوية:
+      1. GUARDIAN_DB_URL لو معرّف صراحة (مثلاً PostgreSQL)
+      2. RAILWAY_VOLUME_MOUNT_PATH لو النشر على Railway مع Volume — يخزن
+         ملف SQLite داخل الـ Volume عشان ما ينمسح مع كل deploy
+      3. sqlite محلي (التطوير على جهازك)
+    """
+    explicit = os.environ.get("GUARDIAN_DB_URL")
+    if explicit:
+        return explicit
+
+    volume_path = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if volume_path:
+        return f"sqlite:///{volume_path}/guardian_recon.db"
+
+    return "sqlite:///./guardian_recon.db"

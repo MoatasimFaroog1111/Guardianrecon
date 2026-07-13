@@ -15,12 +15,14 @@ from typing import List, Optional
 import json
 import os
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+import logging
+import secrets
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-import logging
 
 from .state import state, ApprovalStatus
 from ..engine.models import ReconciliationItem, ReconCategory
@@ -31,6 +33,38 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
 )
 logger = logging.getLogger("guardian_recon.api")
+
+# ============================================================
+# حماية بكلمة مرور (HTTP Basic) — بند 1.2 من خارطة الطريق
+# تُعرَّف عبر متغيري بيئة: DASHBOARD_USER و DASHBOARD_PASSWORD
+# لو ما كانا معرّفين (تطوير محلي)، الحماية تتعطل تلقائياً.
+# ============================================================
+security = HTTPBasic(auto_error=False)
+
+
+def verify_auth(credentials: HTTPBasicCredentials = Depends(security)):
+    expected_user = os.environ.get("DASHBOARD_USER")
+    expected_pass = os.environ.get("DASHBOARD_PASSWORD")
+
+    if not expected_user or not expected_pass:
+        return "dev"  # تطوير محلي بدون حماية
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="تسجيل الدخول مطلوب",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    user_ok = secrets.compare_digest(credentials.username, expected_user)
+    pass_ok = secrets.compare_digest(credentials.password, expected_pass)
+    if not (user_ok and pass_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="بيانات دخول خاطئة",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 app = FastAPI(title="GuardianRecon Dashboard")
 
@@ -86,7 +120,7 @@ class BulkDecisionRequest(BaseModel):
 # Routes — تشغيل تسوية جديدة (تجريبي، لحد ما نربط Odoo فعلياً)
 # ============================================================
 @app.post("/api/run-demo")
-async def run_demo_reconciliation():
+async def run_demo_reconciliation(user: str = Depends(verify_auth)):
     """يشغّل تسوية بنفس بيانات الديمو — نقطة بداية سريعة لاختبار اللوحة."""
     from ..demo import build_sample_data
 
@@ -102,22 +136,22 @@ async def run_demo_reconciliation():
 
 
 @app.get("/api/stats")
-async def get_stats():
+async def get_stats(user: str = Depends(verify_auth)):
     return state.stats()
 
 
 @app.get("/api/items")
-async def get_items(category: Optional[str] = None, approval_status: Optional[str] = None):
+async def get_items(category: Optional[str] = None, approval_status: Optional[str] = None, user: str = Depends(verify_auth)):
     return state.get_items(category=category, approval_status=approval_status)
 
 
 @app.get("/api/activity")
-async def get_activity():
+async def get_activity(user: str = Depends(verify_auth)):
     return state.get_activity(limit=50)
 
 
 @app.post("/api/decide")
-async def decide(req: DecisionRequest):
+async def decide(req: DecisionRequest, user: str = Depends(verify_auth)):
     try:
         result = state.decide(req.item_id, req.approve, req.decided_by, req.comment)
     except KeyError:
@@ -134,7 +168,7 @@ async def decide(req: DecisionRequest):
 
 
 @app.post("/api/bulk-decide")
-async def bulk_decide(req: BulkDecisionRequest):
+async def bulk_decide(req: BulkDecisionRequest, user: str = Depends(verify_auth)):
     records = state.bulk_decide(req.item_ids, req.approve, req.decided_by)
     await manager.broadcast({"type": "refresh", "stats": state.stats()})
     return {"ok": True, "count": len(records)}
@@ -158,7 +192,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # Static Dashboard
 # ============================================================
 @app.get("/", response_class=HTMLResponse)
-async def dashboard_page():
+async def dashboard_page(user: str = Depends(verify_auth)):
     html_path = os.path.join(STATIC_DIR, "dashboard.html")
     with open(html_path, "r", encoding="utf-8") as f:
         return f.read()

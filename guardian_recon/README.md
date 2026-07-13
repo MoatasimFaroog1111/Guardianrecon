@@ -119,6 +119,26 @@ connector.connect()
 `Settings` → `Secrets and variables` → `Actions` → `New repository secret` —
 نفس الأسماء أعلاه بالضبط (حساسة لحالة الأحرف).
 
+## النشر على Railway (رابط عام)
+
+المشروع جاهز للنشر على [Railway](https://railway.app) مباشرة من GitHub:
+
+1. سجّل دخول على railway.app (بحساب GitHub نفسه)
+2. **New Project** → **Deploy from GitHub repo** → اختر `Guardianrecon`
+3. Railway بيكتشف Python تلقائياً ويستخدم `railway.json` (أمر التشغيل جاهز)
+4. **إلزامي — الحماية**: بعد إنشاء الخدمة، روح **Variables** وأضف:
+   - `DASHBOARD_USER` = اسم دخولك (مثلاً `moatasim`)
+   - `DASHBOARD_PASSWORD` = كلمة مرور قوية
+   - بدونهما اللوحة بتكون مفتوحة للعالم كله — لا تنشر بدونهما أبداً
+5. **مهم — ثبات البيانات**: أضف Volume (**Settings → Volumes → Add Volume**)
+   على أي مسار (مثلاً `/data`). الكود يكتشف `RAILWAY_VOLUME_MOUNT_PATH`
+   تلقائياً ويخزن قاعدة البيانات داخله — بدون Volume تنمسح القرارات مع كل deploy
+6. (اختياري) أضف أسرار Odoo (نفس الأسماء: `ODOO_HOST`...) للتسوية الحقيقية
+7. **Settings → Networking → Generate Domain** — يعطيك رابط عام مثل
+   `guardianrecon-production.up.railway.app`
+
+افتح الرابط، سجّل دخول بالبيانات اللي حطيتها، واللوحة كاملة قدامك.
+
 ## لوحة المراقبة والموافقات (Human-in-the-loop Dashboard)
 
 طبقة FastAPI + WebSocket فوق المحرك، بواجهة Dark Theme عربي، تخليك تراقب
