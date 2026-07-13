@@ -20,9 +20,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r guardian_recon/requirements.txt
-          pip install pytest fastapi uvicorn sqlalchemy
+          if [ -f guardian_recon/requirements.txt ]; then
+            pip install -r guardian_recon/requirements.txt
+          else
+            pip install -r requirements.txt
+          fi
 
       - name: Run tests
         run: |
-          pytest guardian_recon/tests/ -v
+          if [ -d guardian_recon/tests ]; then
+            pytest guardian_recon/tests/ -v
+          else
+            pytest tests/ -v
+          fi
