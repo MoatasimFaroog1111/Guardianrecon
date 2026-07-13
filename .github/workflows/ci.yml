@@ -28,6 +28,7 @@ jobs:
             echo "Could not find requirements.txt in guardian_recon/ or repository root" >&2
             exit 1
           fi
+          pip install pytest fastapi uvicorn sqlalchemy
 
       - name: Run tests
         run: |
