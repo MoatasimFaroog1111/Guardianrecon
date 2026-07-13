@@ -13,11 +13,14 @@ from __future__ import annotations
 from datetime import date
 from difflib import SequenceMatcher
 from typing import List, Tuple
+import logging
 
 from .models import (
     BankTransaction, GLTransaction, ReconciliationItem,
     ReconCategory, ItemStatus,
 )
+
+logger = logging.getLogger("guardian_recon.engine")
 
 AMOUNT_TOLERANCE = 0.01     # فرق مسموح به بالريال (أخطاء تقريب)
 DATE_WINDOW_DAYS = 5        # نافذة الأيام للمطابقة التقريبية (شيكات معلقة عادة تتأخر)
@@ -185,6 +188,11 @@ class ReconciliationEngine:
 
         self.items = exact_items + fuzzy_items + unmatched_items
         self._apply_aging(self.items)
+
+        logger.info(
+            "Reconciliation run complete: %d exact, %d fuzzy, %d unmatched (total=%d)",
+            len(exact_items), len(fuzzy_items), len(unmatched_items), len(self.items),
+        )
         return self.items
 
     # -----------------------------------------------------------------

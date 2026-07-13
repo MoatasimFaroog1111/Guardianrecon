@@ -20,9 +20,17 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import logging
+
 from .state import state, ApprovalStatus
 from ..engine.models import ReconciliationItem, ReconCategory
 from ..engine.reconciler import ReconciliationEngine
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("guardian_recon.api")
 
 app = FastAPI(title="GuardianRecon Dashboard")
 
@@ -75,34 +83,6 @@ class BulkDecisionRequest(BaseModel):
 
 
 # ============================================================
-# Helpers — تحويل ReconciliationItem إلى JSON قابل للعرض
-# ============================================================
-def serialize_item(item: ReconciliationItem) -> dict:
-    approval = state.approvals.get(item.id)
-    ref_txn = item.bank_txn or item.gl_txn
-    return {
-        "id": item.id,
-        "category": item.category.value,
-        "date": str(ref_txn.txn_date) if ref_txn else None,
-        "description": (
-            (item.bank_txn.description_en if item.bank_txn else None)
-            or (item.gl_txn.description if item.gl_txn else "")
-        ),
-        "party_type": item.bank_txn.party_type.value if item.bank_txn and item.bank_txn.party_type else None,
-        "amount": ref_txn.amount if ref_txn else 0,
-        "difference": item.difference,
-        "status": item.status.value,
-        "age_days": item.age_days,
-        "match_confidence": item.match_confidence,
-        "note": item.note,
-        "approval_status": approval.status.value if approval else "unknown",
-        "decided_by": approval.decided_by if approval else None,
-        "decided_at": approval.decided_at.isoformat() if approval and approval.decided_at else None,
-        "posted_to_odoo": approval.posted_to_odoo if approval else False,
-    }
-
-
-# ============================================================
 # Routes — تشغيل تسوية جديدة (تجريبي، لحد ما نربط Odoo فعلياً)
 # ============================================================
 @app.post("/api/run-demo")
@@ -113,10 +93,12 @@ async def run_demo_reconciliation():
     bank_txns, gl_txns = build_sample_data()
     engine = ReconciliationEngine(bank_txns, gl_txns, as_of=date(2026, 6, 30))
     engine.run()
-    state.load_from_engine(engine)
+    run_id = state.load_from_engine(engine, source="demo")
+    logger.info("Demo reconciliation run created: %s", run_id)
 
-    await manager.broadcast({"type": "refresh", "stats": state.stats()})
-    return {"ok": True, "stats": state.stats()}
+    stats = state.stats()
+    await manager.broadcast({"type": "refresh", "stats": stats})
+    return {"ok": True, "run_id": run_id, "stats": stats}
 
 
 @app.get("/api/stats")
@@ -126,44 +108,29 @@ async def get_stats():
 
 @app.get("/api/items")
 async def get_items(category: Optional[str] = None, approval_status: Optional[str] = None):
-    items = list(state.items.values())
-
-    if category:
-        items = [i for i in items if i.category.value == category]
-    if approval_status:
-        items = [
-            i for i in items
-            if state.approvals.get(i.id) and state.approvals[i.id].status.value == approval_status
-        ]
-
-    # الأخطر أولاً: تصعيد ثم الأعلى مبلغاً
-    items.sort(key=lambda i: (
-        0 if (abs(i.difference) > 10000 or i.status.value in ("Overdue", "Stale")) else 1,
-        -abs(i.difference)
-    ))
-
-    return [serialize_item(i) for i in items]
+    return state.get_items(category=category, approval_status=approval_status)
 
 
 @app.get("/api/activity")
 async def get_activity():
-    return state.activity_log[:50]
+    return state.get_activity(limit=50)
 
 
 @app.post("/api/decide")
 async def decide(req: DecisionRequest):
     try:
-        record = state.decide(req.item_id, req.approve, req.decided_by, req.comment)
+        result = state.decide(req.item_id, req.approve, req.decided_by, req.comment)
     except KeyError:
         raise HTTPException(status_code=404, detail="العنصر غير موجود")
 
+    stats = state.stats()
     await manager.broadcast({
         "type": "decision",
         "item_id": req.item_id,
-        "status": record.status.value,
-        "stats": state.stats(),
+        "status": result["status"],
+        "stats": stats,
     })
-    return {"ok": True, "status": record.status.value}
+    return {"ok": True, "status": result["status"]}
 
 
 @app.post("/api/bulk-decide")
