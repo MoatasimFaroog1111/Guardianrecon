@@ -22,14 +22,20 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f guardian_recon/requirements.txt ]; then
             pip install -r guardian_recon/requirements.txt
-          else
+          elif [ -f requirements.txt ]; then
             pip install -r requirements.txt
+          else
+            echo "Could not find requirements.txt in guardian_recon/ or repository root" >&2
+            exit 1
           fi
 
       - name: Run tests
         run: |
           if [ -d guardian_recon/tests ]; then
             pytest guardian_recon/tests/ -v
-          else
+          elif [ -d tests ]; then
             pytest tests/ -v
+          else
+            echo "Could not find tests/ in guardian_recon/ or repository root" >&2
+            exit 1
           fi
