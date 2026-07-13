@@ -18,7 +18,7 @@ import os
 import logging
 import secrets
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
@@ -133,6 +133,78 @@ async def run_demo_reconciliation(user: str = Depends(verify_auth)):
     stats = state.stats()
     await manager.broadcast({"type": "refresh", "stats": stats})
     return {"ok": True, "run_id": run_id, "stats": stats}
+
+
+# ============================================================
+# التسوية الحية — كشف حساب مرفوع + قيود Odoo فعلية (بند 1.4)
+# ============================================================
+@app.post("/api/run-live")
+async def run_live_reconciliation(
+    file: UploadFile = File(...),
+    account_code: str = Form(...),
+    date_from: str = Form(...),
+    date_to: str = Form(...),
+    user: str = Depends(verify_auth),
+):
+    """
+    التسوية الحقيقية الكاملة:
+    1. يستقبل ملف كشف حساب (CSV/Excel) من المتصفح
+    2. يسحب قيود GL للحساب المحدد من Odoo مباشرة (via ODOO_* env vars)
+    3. يشغّل محرك التسوية ويحفظ النتيجة بقاعدة البيانات
+    """
+    import tempfile
+    from datetime import datetime as dt
+
+    # 1) حفظ الملف المرفوع مؤقتاً وقراءته
+    suffix = os.path.splitext(file.filename or "statement.csv")[1] or ".csv"
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        from ..connectors.bank_statement_loader import load_bank_statement
+        bank_txns = load_bank_statement(tmp_path)
+    except Exception as e:
+        logger.error("Failed to parse bank statement: %s", e)
+        raise HTTPException(status_code=400, detail=f"فشل قراءة كشف الحساب: {e}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+    if not bank_txns:
+        raise HTTPException(status_code=400, detail="كشف الحساب فارغ أو التنسيق غير مدعوم")
+
+    # 2) سحب قيود GL من Odoo
+    try:
+        from ..connectors.odoo_connector import OdooConnector
+        connector = OdooConnector.from_env()
+        connector.connect()
+        gl_txns = connector.fetch_gl_transactions(
+            account_code=account_code, date_from=date_from, date_to=date_to
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Odoo fetch failed: %s", type(e).__name__)
+        raise HTTPException(status_code=502, detail=f"فشل الاتصال بأودو: {type(e).__name__}")
+
+    # 3) تشغيل التسوية وحفظها
+    as_of = dt.strptime(date_to, "%Y-%m-%d").date()
+    engine = ReconciliationEngine(bank_txns, gl_txns, as_of=as_of)
+    engine.run()
+    run_id = state.load_from_engine(engine, source="odoo_live")
+    logger.info("LIVE reconciliation run %s: %d bank txns vs %d GL entries",
+                run_id, len(bank_txns), len(gl_txns))
+
+    stats = state.stats()
+    await manager.broadcast({"type": "refresh", "stats": stats})
+    return {
+        "ok": True, "run_id": run_id,
+        "bank_txns": len(bank_txns), "gl_txns": len(gl_txns),
+        "stats": stats,
+    }
 
 
 @app.get("/api/stats")

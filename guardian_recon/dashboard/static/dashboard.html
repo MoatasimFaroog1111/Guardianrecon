@@ -178,8 +178,37 @@
       <span id="liveText">غير متصل</span> · آخر تشغيل: <span id="lastRun">—</span>
     </div>
   </div>
-  <button class="btn" onclick="runDemo()">▶ تشغيل تسوية تجريبية</button>
+  <div style="display:flex; gap:8px;">
+    <button class="btn ghost" onclick="toggleLivePanel()">📂 تسوية حقيقية (كشف + Odoo)</button>
+    <button class="btn" onclick="runDemo()">▶ تشغيل تسوية تجريبية</button>
+  </div>
 </header>
+
+<div id="livePanel" style="display:none; background:var(--panel); border:1px solid var(--accent); border-radius:10px; padding:16px; margin-bottom:20px;">
+  <div style="font-size:14px; font-weight:600; margin-bottom:12px;">التسوية الحية: كشف حساب فعلي مقابل قيود Odoo</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:12px;">
+    <div>
+      <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">ملف كشف الحساب (CSV/Excel)</label>
+      <input type="file" id="liveFile" accept=".csv,.xlsx,.xls" style="font-size:12px; color:var(--text); width:100%;">
+    </div>
+    <div>
+      <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">كود الحساب البنكي بأودو</label>
+      <input type="text" id="liveAccount" placeholder="مثال: 1010" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:7px 10px; color:var(--text); font-size:13px;">
+    </div>
+    <div>
+      <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">من تاريخ</label>
+      <input type="date" id="liveFrom" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--text); font-size:13px;">
+    </div>
+    <div>
+      <label style="font-size:12px; color:var(--muted); display:block; margin-bottom:4px;">إلى تاريخ</label>
+      <input type="date" id="liveTo" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--text); font-size:13px;">
+    </div>
+  </div>
+  <div style="display:flex; align-items:center; gap:12px;">
+    <button class="btn green" onclick="runLive()" id="liveBtn">🚀 تشغيل التسوية الحية</button>
+    <span id="liveStatus" style="font-size:12px; color:var(--muted);"></span>
+  </div>
+</div>
 
 <div class="stats-grid" id="statsGrid"></div>
 
@@ -359,6 +388,47 @@ document.getElementById("tabs").addEventListener("click", (e) => {
 
 async function runDemo() {
   await fetch(API + "/api/run-demo", { method: "POST" });
+}
+
+function toggleLivePanel() {
+  const p = document.getElementById("livePanel");
+  p.style.display = p.style.display === "none" ? "block" : "none";
+}
+
+async function runLive() {
+  const fileInput = document.getElementById("liveFile");
+  const account = document.getElementById("liveAccount").value.trim();
+  const from = document.getElementById("liveFrom").value;
+  const to = document.getElementById("liveTo").value;
+  const statusEl = document.getElementById("liveStatus");
+  const btn = document.getElementById("liveBtn");
+
+  if (!fileInput.files.length) { statusEl.textContent = "⚠️ اختر ملف كشف الحساب أولاً"; return; }
+  if (!account) { statusEl.textContent = "⚠️ اكتب كود الحساب البنكي"; return; }
+  if (!from || !to) { statusEl.textContent = "⚠️ حدد الفترة (من/إلى)"; return; }
+
+  btn.disabled = true;
+  statusEl.textContent = "⏳ جاري رفع الكشف والاتصال بأودو...";
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  formData.append("account_code", account);
+  formData.append("date_from", from);
+  formData.append("date_to", to);
+
+  try {
+    const res = await fetch(API + "/api/run-live", { method: "POST", body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      statusEl.textContent = `✅ تمت: ${data.bank_txns} معاملة بنكية مقابل ${data.gl_txns} قيد Odoo`;
+    } else {
+      statusEl.textContent = `❌ ${data.detail || "فشل غير معروف"}`;
+    }
+  } catch (e) {
+    statusEl.textContent = "❌ خطأ بالاتصال: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function fetchActivity() {
