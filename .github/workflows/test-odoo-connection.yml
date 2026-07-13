@@ -1,0 +1,48 @@
+name: Test Odoo Connection
+
+# يُشغَّل يدوياً فقط (مو عند كل push) — لأنه يلمس بيانات حقيقية
+on:
+  workflow_dispatch:
+    inputs:
+      test_account_code:
+        description: "كود حساب Odoo للاختبار (اختياري)"
+        required: false
+        default: ""
+      test_date_from:
+        description: "من تاريخ (اختياري)"
+        required: false
+        default: "2026-01-01"
+      test_date_to:
+        description: "إلى تاريخ (اختياري)"
+        required: false
+        default: "2026-12-31"
+
+jobs:
+  test-connection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r guardian_recon/requirements.txt
+
+      - name: Test Odoo connection
+        env:
+          ODOO_HOST: ${{ secrets.ODOO_HOST }}
+          ODOO_PORT: ${{ secrets.ODOO_PORT }}
+          ODOO_PROTOCOL: ${{ secrets.ODOO_PROTOCOL }}
+          ODOO_DB: ${{ secrets.ODOO_DB }}
+          ODOO_USER: ${{ secrets.ODOO_USER }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD }}
+          TEST_ACCOUNT_CODE: ${{ github.event.inputs.test_account_code }}
+          TEST_DATE_FROM: ${{ github.event.inputs.test_date_from }}
+          TEST_DATE_TO: ${{ github.event.inputs.test_date_to }}
+        run: |
+          python guardian_recon/scripts/test_odoo_connection.py
