@@ -45,4 +45,4 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest "$TEST_DIR"/ -v
+          pytest "$TEST_DIR" -v
