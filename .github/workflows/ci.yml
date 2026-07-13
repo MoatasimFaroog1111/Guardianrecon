@@ -24,7 +24,7 @@ jobs:
           elif [ -f requirements.txt ]; then
             echo "REQ_FILE=requirements.txt" >> "$GITHUB_ENV"
           else
-            echo "No requirements.txt file found." >&2
+            echo "No requirements.txt found in guardian_recon/ or the repository root." >&2
             exit 1
           fi
 
@@ -33,7 +33,7 @@ jobs:
           elif [ -d tests ]; then
             echo "TEST_DIR=tests" >> "$GITHUB_ENV"
           else
-            echo "No tests directory found." >&2
+            echo "No tests directory found in guardian_recon/ or the repository root." >&2
             exit 1
           fi
 
