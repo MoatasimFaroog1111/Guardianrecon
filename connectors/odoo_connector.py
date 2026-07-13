@@ -35,6 +35,18 @@ class OdooConnector:
         self.protocol = protocol
         self.odoo: Optional["odoorpc.ODOO"] = None
 
+    @classmethod
+    def from_env(cls) -> "OdooConnector":
+        """
+        يبني الاتصال تلقائياً من متغيرات البيئة (ODOO_HOST, ODOO_DB, ...)
+        بدل ما تكتب بيانات الاتصال بالكود — يشتغل نفس الشي محلياً (.env)
+        أو بالإنتاج (GitHub Secrets / متغيرات بيئة السيرفر الفعلي).
+        """
+        from ..config import get_odoo_config
+        cfg = get_odoo_config()
+        return cls(host=cfg.host, db=cfg.db, user=cfg.user,
+                    password=cfg.password, port=cfg.port, protocol=cfg.protocol)
+
     def connect(self):
         self.odoo = odoorpc.ODOO(self.host, protocol=self.protocol, port=self.port)
         self.odoo.login(self.db, self.user, self.password)

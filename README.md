@@ -81,6 +81,44 @@ for item in summary["items_by_category"]["Adjustment Required"]:
     )
 ```
 
+## إعداد الأسرار (Secrets) — الاتصال بأودو
+
+المشروع **لا يحتوي على أي بيانات اتصال حقيقية بالكود** — كلها تُقرأ من متغيرات
+البيئة، محلياً عبر ملف `.env` أو بالإنتاج عبر GitHub Secrets. هذا يخلي الكود
+آمن للرفع حتى لو المستودع عام.
+
+### محلياً
+```bash
+cp .env.example .env
+# افتح .env وعبّي القيم الحقيقية
+```
+
+### الأسرار المطلوبة
+
+| الاسم | الوصف | مثال |
+|---|---|---|
+| `ODOO_HOST` | نطاق/IP سيرفر Odoo بدون `https://` | `mycompany.odoo.com` |
+| `ODOO_PORT` | المنفذ (443 للسحابي عادة) | `443` |
+| `ODOO_PROTOCOL` | `jsonrpc+ssl` سحابي / `jsonrpc` محلي بدون SSL | `jsonrpc+ssl` |
+| `ODOO_DB` | اسم قاعدة بيانات Odoo | `mycompany-prod` |
+| `ODOO_USER` | إيميل حساب Odoo | `moatasim@gitc.com` |
+| `ODOO_PASSWORD` | كلمة المرور أو API Key (يُفضّل API Key) | — |
+
+اختياري: `GUARDIAN_DB_URL` لو رقّينا من SQLite لـ PostgreSQL لاحقاً.
+
+### بالكود
+```python
+from guardian_recon.connectors.odoo_connector import OdooConnector
+
+# يقرأ تلقائياً من .env أو من متغيرات البيئة — بدون ما تكتب بيانات بالكود
+connector = OdooConnector.from_env()
+connector.connect()
+```
+
+### GitHub Secrets
+`Settings` → `Secrets and variables` → `Actions` → `New repository secret` —
+نفس الأسماء أعلاه بالضبط (حساسة لحالة الأحرف).
+
 ## لوحة المراقبة والموافقات (Human-in-the-loop Dashboard)
 
 طبقة FastAPI + WebSocket فوق المحرك، بواجهة Dark Theme عربي، تخليك تراقب

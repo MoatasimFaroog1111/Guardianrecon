@@ -17,7 +17,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-DATABASE_URL = os.environ.get("GUARDIAN_DB_URL", "sqlite:///./guardian_recon.db")
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from guardian_recon.config import get_database_url
+
+DATABASE_URL = get_database_url()
 
 engine = create_engine(
     DATABASE_URL,
