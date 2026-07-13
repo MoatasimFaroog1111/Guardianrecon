@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GuardianRecon — لوحة المراقبة والموافقات</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-hover: #1c2129;
+    --border: #2a2f38;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #3fa9f5;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --orange: #ff8c42;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    margin: 0;
+    padding: 24px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn.green { background: var(--green); }
+  .btn.red { background: var(--red); }
+  .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-card .value { font-size: 24px; font-weight: 700; }
+  .stat-card .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stat-card.pending .value { color: var(--yellow); }
+  .stat-card.escalation .value { color: var(--red); }
+  .stat-card.approved .value { color: var(--green); }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .bulk-bar {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    padding: 10px 16px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+  }
+  .bulk-bar.show { display: flex; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: right;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+  }
+  td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  tr:hover { background: var(--panel-hover); }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.Matched { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge.Timing { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .badge.Adjustment { background: rgba(255,140,66,.15); color: var(--orange); }
+  .badge.Investigation { background: rgba(248,81,73,.15); color: var(--red); }
+
+  .status-pill { font-size: 11px; padding: 3px 10px; border-radius: 12px; }
+  .status-pill.pending { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .status-pill.approved { background: rgba(63,185,80,.15); color: var(--green); }
+  .status-pill.rejected { background: rgba(248,81,73,.15); color: var(--red); }
+  .status-pill.auto_cleared { background: rgba(139,148,158,.15); color: var(--muted); }
+
+  .amount { font-family: 'Consolas', monospace; }
+  .amount.neg { color: var(--red); }
+  .amount.pos { color: var(--green); }
+
+  .actions { display: flex; gap: 6px; }
+  .icon-btn {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 14px;
+  }
+  .icon-btn.approve:hover { background: rgba(63,185,80,.2); border-color: var(--green); }
+  .icon-btn.reject:hover { background: rgba(248,81,73,.2); border-color: var(--red); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); display: inline-block; margin-left: 6px;
+  }
+  .live-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+  .activity-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 24px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .activity-item { font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
+  .activity-item b { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🛡️ Guardian<span>Recon</span> — لوحة المراقبة والموافقات</h1>
+    <div class="subtitle">
+      <span class="live-dot" id="liveDot"></span>
+      <span id="liveText">غير متصل</span> · آخر تشغيل: <span id="lastRun">—</span>
+    </div>
+  </div>
+  <button class="btn" onclick="runDemo()">▶ تشغيل تسوية تجريبية</button>
+</header>
+
+<div class="stats-grid" id="statsGrid"></div>
+
+<div class="tabs" id="tabs">
+  <div class="tab active" data-cat="">الكل</div>
+  <div class="tab" data-cat="Matched">مطابق تماماً</div>
+  <div class="tab" data-cat="Timing Difference">فروقات توقيت</div>
+  <div class="tab" data-cat="Adjustment Required">تحتاج تسوية</div>
+  <div class="tab" data-cat="Requires Investigation">تحتاج تحقيق</div>
+</div>
+
+<div class="bulk-bar" id="bulkBar">
+  <span id="bulkCount">0 عنصر محدد</span>
+  <div class="actions">
+    <button class="btn green" onclick="bulkDecide(true)">✓ موافقة على المحدد</button>
+    <button class="btn red" onclick="bulkDecide(false)">✗ رفض المحدد</button>
+    <button class="btn ghost" onclick="clearSelection()">إلغاء التحديد</button>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width:30px"><input type="checkbox" id="selectAll" onclick="toggleAll(this)"></th>
+      <th>التاريخ</th>
+      <th>الوصف</th>
+      <th>التصنيف</th>
+      <th>الطرف</th>
+      <th>الفرق</th>
+      <th>الثقة</th>
+      <th>التقادم</th>
+      <th>حالة الموافقة</th>
+      <th>إجراء</th>
+    </tr>
+  </thead>
+  <tbody id="itemsBody"></tbody>
+</table>
+<div class="empty-state" id="emptyState" style="display:none">
+  ما فيه عناصر — اضغط "تشغيل تسوية تجريبية" للبدء
+</div>
+
+<div class="activity-panel">
+  <div style="font-size:13px; font-weight:600; margin-bottom:10px;">📋 سجل النشاط</div>
+  <div id="activityLog"></div>
+</div>
+
+<script>
+const API = "";
+let currentCategory = "";
+let selectedIds = new Set();
+let allItems = [];
+
+const catClass = (cat) => {
+  if (cat === "Matched") return "Matched";
+  if (cat === "Timing Difference") return "Timing";
+  if (cat === "Adjustment Required") return "Adjustment";
+  return "Investigation";
+};
+
+async function fetchStats() {
+  const res = await fetch(API + "/api/stats");
+  const stats = await res.json();
+  renderStats(stats);
+}
+
+function renderStats(stats) {
+  const c = stats.counts || {};
+  document.getElementById("statsGrid").innerHTML = `
+    <div class="stat-card"><div class="value">${stats.total_items}</div><div class="label">إجمالي العناصر</div></div>
+    <div class="stat-card pending"><div class="value">${stats.pending_count}</div><div class="label">بانتظار الموافقة</div></div>
+    <div class="stat-card approved"><div class="value">${c.approved || 0}</div><div class="label">تمت الموافقة</div></div>
+    <div class="stat-card"><div class="value" style="color:var(--red)">${c.rejected || 0}</div><div class="label">مرفوض</div></div>
+    <div class="stat-card escalation"><div class="value">${stats.escalation_count}</div><div class="label">⚠️ يحتاج تصعيد</div></div>
+    <div class="stat-card"><div class="value" style="color:var(--muted)">${c.auto_cleared || 0}</div><div class="label">مطابق تلقائياً</div></div>
+  `;
+  document.getElementById("lastRun").textContent = stats.last_run_at ? new Date(stats.last_run_at).toLocaleString('ar-SA') : "—";
+}
+
+async function fetchItems() {
+  const url = new URL(API + "/api/items", window.location.origin);
+  if (currentCategory) url.searchParams.set("category", currentCategory);
+  const res = await fetch(url);
+  allItems = await res.json();
+  renderItems();
+}
+
+function renderItems() {
+  const body = document.getElementById("itemsBody");
+  const empty = document.getElementById("emptyState");
+  if (allItems.length === 0) {
+    body.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+
+  body.innerHTML = allItems.map(item => {
+    const amtClass = item.difference < 0 ? "neg" : "pos";
+    const checked = selectedIds.has(item.id) ? "checked" : "";
+    const canDecide = item.approval_status === "pending";
+    return `
+      <tr>
+        <td><input type="checkbox" class="row-check" data-id="${item.id}" ${checked} ${canDecide ? "" : "disabled"} onclick="toggleRow('${item.id}', this)"></td>
+        <td>${item.date || "—"}</td>
+        <td>${item.description || ""}</td>
+        <td><span class="badge ${catClass(item.category)}">${item.category}</span></td>
+        <td>${item.party_type || "—"}</td>
+        <td class="amount ${amtClass}">${item.difference.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
+        <td>${Math.round(item.match_confidence * 100)}%</td>
+        <td>${item.status} (${item.age_days}ي)</td>
+        <td><span class="status-pill ${item.approval_status}">${statusLabel(item.approval_status)}</span></td>
+        <td>
+          <div class="actions">
+            ${canDecide ? `
+              <button class="icon-btn approve" onclick="decide('${item.id}', true)" title="موافقة">✓</button>
+              <button class="icon-btn reject" onclick="decide('${item.id}', false)" title="رفض">✗</button>
+            ` : `<span style="color:var(--muted); font-size:11px">${item.decided_by || ""}</span>`}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function statusLabel(s) {
+  return { pending: "بانتظار القرار", approved: "موافَق عليه", rejected: "مرفوض", auto_cleared: "مطابق تلقائياً" }[s] || s;
+}
+
+async function decide(itemId, approve) {
+  await fetch(API + "/api/decide", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({item_id: itemId, approve})
+  });
+}
+
+async function bulkDecide(approve) {
+  if (selectedIds.size === 0) return;
+  await fetch(API + "/api/bulk-decide", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({item_ids: Array.from(selectedIds), approve})
+  });
+  clearSelection();
+}
+
+function toggleRow(id, el) {
+  if (el.checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateBulkBar();
+}
+function toggleAll(el) {
+  document.querySelectorAll(".row-check:not(:disabled)").forEach(cb => {
+    cb.checked = el.checked;
+    if (el.checked) selectedIds.add(cb.dataset.id); else selectedIds.delete(cb.dataset.id);
+  });
+  updateBulkBar();
+}
+function clearSelection() {
+  selectedIds.clear();
+  document.getElementById("selectAll").checked = false;
+  updateBulkBar();
+  renderItems();
+}
+function updateBulkBar() {
+  const bar = document.getElementById("bulkBar");
+  document.getElementById("bulkCount").textContent = `${selectedIds.size} عنصر محدد`;
+  bar.classList.toggle("show", selectedIds.size > 0);
+}
+
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest(".tab");
+  if (!tab) return;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  tab.classList.add("active");
+  currentCategory = tab.dataset.cat;
+  clearSelection();
+  fetchItems();
+});
+
+async function runDemo() {
+  await fetch(API + "/api/run-demo", { method: "POST" });
+}
+
+async function fetchActivity() {
+  const res = await fetch(API + "/api/activity");
+  const log = await res.json();
+  document.getElementById("activityLog").innerHTML = log.length ? log.map(l => `
+    <div class="activity-item"><b>${l.actor}</b> ${l.action} — ${l.detail} <span style="float:left">${new Date(l.timestamp).toLocaleTimeString('ar-SA')}</span></div>
+  `).join("") : `<div class="activity-item">لا يوجد نشاط بعد</div>`;
+}
+
+// WebSocket للتحديث الحي
+function connectWS() {
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${window.location.host}/ws`);
+  ws.onopen = () => {
+    document.getElementById("liveDot").classList.add("connected");
+    document.getElementById("liveText").textContent = "متصل مباشر";
+  };
+  ws.onclose = () => {
+    document.getElementById("liveDot").classList.remove("connected");
+    document.getElementById("liveText").textContent = "انقطع الاتصال — إعادة محاولة...";
+    setTimeout(connectWS, 2000);
+  };
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.stats) renderStats(msg.stats);
+    fetchItems();
+    fetchActivity();
+  };
+}
+
+// تحميل أولي
+fetchStats();
+fetchItems();
+fetchActivity();
+connectWS();
+</script>
+</body>
+</html>
