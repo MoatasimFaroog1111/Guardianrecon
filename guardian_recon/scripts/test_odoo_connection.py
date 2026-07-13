@@ -13,7 +13,7 @@ GuardianRecon — Odoo Connection Test Script
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from guardian_recon.config import get_odoo_config
 from guardian_recon.connectors.odoo_connector import OdooConnector
