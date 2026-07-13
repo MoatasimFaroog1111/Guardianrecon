@@ -13,7 +13,7 @@ GuardianRecon — Odoo Connection Test Script
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from guardian_recon.config import get_odoo_config
 from guardian_recon.connectors.odoo_connector import OdooConnector
@@ -26,6 +26,36 @@ def mask(value: str, keep: int = 2) -> str:
     return f"{value[:keep]}{'*' * (len(value) - keep * 2)}{value[-keep:]}"
 
 
+def sanitize_error(text: str, cfg) -> str:
+    """
+    يستبدل أي ظهور حرفي لقيم حساسة (host/db/user/password) داخل رسالة
+    الخطأ بنسخة مموّهة، قبل ما نطبعها كـ GitHub annotation — احتياط
+    إضافي لأن استثناءات المكتبات أحياناً تحط تفاصيل الاتصال بالخطأ.
+    """
+    if cfg is None:
+        return text
+    for secret_val, label in [
+        (cfg.password, "[ODOO_PASSWORD]"),
+        (cfg.host, mask(cfg.host)),
+        (cfg.db, mask(cfg.db)),
+        (cfg.user, mask(cfg.user)),
+    ]:
+        if secret_val and secret_val in text:
+            text = text.replace(secret_val, label)
+    return text
+
+
+def gh_error(msg: str):
+    """يطبع رسالة كـ GitHub Actions annotation (::error::) — تظهر بالـ API مباشرة."""
+    print(f"::error::{msg}")
+    print(f"❌ {msg}")
+
+
+def gh_notice(msg: str):
+    print(f"::notice::{msg}")
+    print(f"✅ {msg}")
+
+
 def main():
     print("=" * 60)
     print("GuardianRecon — اختبار الاتصال بـ Odoo")
@@ -35,28 +65,28 @@ def main():
     try:
         cfg = get_odoo_config()
     except ValueError as e:
-        print(f"❌ فشل: {e}")
+        gh_error(f"إعدادات ناقصة: {e}")
         sys.exit(1)
 
-    print(f"✅ الإعدادات موجودة: host={mask(cfg.host)}, db={mask(cfg.db)}, "
-          f"user={mask(cfg.user)}, port={cfg.port}, protocol={cfg.protocol}")
+    gh_notice(f"الإعدادات موجودة: host={mask(cfg.host)}, db={mask(cfg.db)}, "
+              f"user={mask(cfg.user)}, port={cfg.port}, protocol={cfg.protocol}")
 
     # 2) محاولة الاتصال الفعلي وتسجيل الدخول
     try:
         connector = OdooConnector.from_env()
         connector.connect()
-        print("✅ تم الاتصال وتسجيل الدخول بنجاح")
+        gh_notice("تم الاتصال وتسجيل الدخول بنجاح")
     except Exception as e:
-        print(f"❌ فشل الاتصال/تسجيل الدخول: {type(e).__name__}: {e}")
+        gh_error(f"فشل الاتصال/تسجيل الدخول: {type(e).__name__}: {sanitize_error(str(e), cfg)}")
         sys.exit(1)
 
     # 3) اختبار قراءة فعلية بسيطة (بدون كتابة أي شي) — حساب مستخدمين مثلاً
     try:
         Users = connector.odoo.env["res.users"]
         count = Users.search_count([])
-        print(f"✅ اختبار قراءة ناجح: {count} مستخدم موجود في قاعدة البيانات")
+        gh_notice(f"اختبار قراءة ناجح: {count} مستخدم موجود في قاعدة البيانات")
     except Exception as e:
-        print(f"⚠️ الاتصال نجح لكن فشل اختبار القراءة: {type(e).__name__}: {e}")
+        gh_error(f"الاتصال نجح لكن فشل اختبار القراءة: {type(e).__name__}: {sanitize_error(str(e), cfg)}")
         sys.exit(1)
 
     # 4) اختبار اختياري: قراءة حساب بنكي محدد لو معطى كمتغير بيئة
@@ -68,9 +98,9 @@ def main():
                 date_from=os.environ.get("TEST_DATE_FROM", "2026-01-01"),
                 date_to=os.environ.get("TEST_DATE_TO", "2026-12-31"),
             )
-            print(f"✅ قراءة قيود الحساب '{mask(account_code)}': {len(gl_txns)} قيد")
+            gh_notice(f"قراءة قيود الحساب '{mask(account_code)}': {len(gl_txns)} قيد")
         except Exception as e:
-            print(f"⚠️ فشل قراءة قيود الحساب: {type(e).__name__}: {e}")
+            gh_error(f"فشل قراءة قيود الحساب: {type(e).__name__}: {sanitize_error(str(e), cfg)}")
             sys.exit(1)
     else:
         print("ℹ️  تم تخطي اختبار قراءة حساب محدد (TEST_ACCOUNT_CODE غير معطى)")

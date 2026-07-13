@@ -17,26 +17,32 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Resolve project paths
+        run: |
+          if [ -f guardian_recon/requirements.txt ]; then
+            echo "REQ_FILE=guardian_recon/requirements.txt" >> "$GITHUB_ENV"
+          elif [ -f requirements.txt ]; then
+            echo "REQ_FILE=requirements.txt" >> "$GITHUB_ENV"
+          else
+            echo "No requirements.txt found in guardian_recon/ or the repository root." >&2
+            exit 1
+          fi
+
+          if [ -d guardian_recon/tests ]; then
+            echo "TEST_DIR=guardian_recon/tests" >> "$GITHUB_ENV"
+          elif [ -d tests ]; then
+            echo "TEST_DIR=tests" >> "$GITHUB_ENV"
+          else
+            echo "No tests directory found in guardian_recon/ or the repository root." >&2
+            exit 1
+          fi
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f guardian_recon/requirements.txt ]; then
-            pip install -r guardian_recon/requirements.txt
-          elif [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            echo "Could not find requirements.txt in guardian_recon/ or repository root" >&2
-            exit 1
-          fi
+          pip install -r "$REQ_FILE"
           pip install pytest fastapi uvicorn sqlalchemy
 
       - name: Run tests
         run: |
-          if [ -d guardian_recon/tests ]; then
-            pytest guardian_recon/tests/ -v
-          elif [ -d tests ]; then
-            pytest tests/ -v
-          else
-            echo "Could not find tests/ in guardian_recon/ or repository root" >&2
-            exit 1
-          fi
+          pytest "$TEST_DIR" -v
